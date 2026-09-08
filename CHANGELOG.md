@@ -4,6 +4,16 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semver](https://semver.org).
 
+## [0.7.1] - 2026-09-08
+
+### Changed
+- README: added a troubleshooting note for `npm i purge-cli` failing with
+  `404 … gigabye-0.1.0.tgz`. purge shipped for a few hours on Aug 30 under
+  its old name, `gigabye`, since unpublished; the error means the current
+  directory's `package.json` still lists it. The note explains the fix and
+  points at `npm i -g` / `npx purge-cli@latest`, which never read the
+  current directory's dependencies. No code changes.
+
 ## [0.7.0] - 2026-08-30
 
 ### Changed

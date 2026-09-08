@@ -31,6 +31,15 @@ update, run `npm i -g purge-cli@latest` again.
 > tool, your npm bin directory comes after `/usr/sbin` in `PATH` — run
 > `purge-cli`, which never collides.
 
+> **`npm i purge-cli` fails with `404 … gigabye-0.1.0.tgz`?** purge shipped
+> for a few hours on Aug 30, 2026 under its old name, `gigabye`, which has
+> since been unpublished. The error means the directory you ran `npm i`
+> from has a `package.json`/`package-lock.json` that still lists `gigabye`,
+> so npm tries to reinstall it alongside purge-cli. Drop the `gigabye`
+> entry (or delete a stray `~/package.json` if you ran it from your home
+> folder), or use `npm i -g purge-cli` / `npx purge-cli@latest`, which
+> never read the current directory's dependencies.
+
 Build output from projects you abandoned last year. Xcode DerivedData
 nobody asked for. Every app's cache folder, coding-agent scratch data,
 package-manager downloads — often tens of gigabytes, sometimes far more,
