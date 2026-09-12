@@ -90,7 +90,7 @@ async function sizeAll(
  */
 export async function scan(
   ctx: ScanContext,
-  opts: { groups: Group[]; minSizeBytes: number; onProgress?: (done: number, bytes: number) => void },
+  opts: { groups: Group[]; minSizeBytes: number; onProgress?: (done: number, bytes: number) => void; onHidden?: (count: number, bytes: number) => void },
 ): Promise<Candidate[]> {
   const wanted = new Set(opts.groups)
   const raw: RawCandidate[] = []
@@ -119,6 +119,8 @@ export async function scan(
   }
 
   const sized = await sizeAll(raw, opts.onProgress)
+  const hidden = sized.filter((c) => c.bytes < opts.minSizeBytes)
+  opts.onHidden?.(hidden.length, hidden.reduce((sum, c) => sum + c.bytes, 0))
   return sized
     .filter((c) => c.bytes >= opts.minSizeBytes)
     .sort((a, b) => b.bytes - a.bytes)

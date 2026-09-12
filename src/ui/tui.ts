@@ -57,10 +57,10 @@ function keyName(
  * Full-screen checkbox review. Resolves with the user's selection, or null
  * if they quit. Restores the terminal on every exit path, including SIGINT.
  */
-export function review(items: Reviewed[]): Promise<Reviewed[] | null> {
+export function review(items: Reviewed[], hidden?: TuiState['hidden']): Promise<Reviewed[] | null> {
   return new Promise((resolve) => {
     const out = process.stdout
-    let state: TuiState = initState(items)
+    let state: TuiState = initState(items, hidden)
 
     let tick = 0
     const draw = () => {

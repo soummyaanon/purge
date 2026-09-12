@@ -32,7 +32,7 @@ export function tildify(p: string, home: string): string {
   return p.startsWith(home) ? `~${p.slice(home.length)}` : p
 }
 
-export function renderReport(items: Reviewed[], opts: { color: boolean; home: string }): string {
+export function renderReport(items: Reviewed[], opts: { color: boolean; home: string; hidden?: { count: number; bytes: number; minSizeBytes: number } }): string {
   const c = palette(opts.color)
   const lines: string[] = []
 
@@ -55,6 +55,7 @@ export function renderReport(items: Reviewed[], opts: { color: boolean; home: st
   }
 
   const selected = items.filter((i) => i.selected && i.selectable).reduce((n, i) => n + i.bytes, 0)
+  if (opts.hidden?.count) lines.push('', c.dim(`${opts.hidden.count} items under ${formatBytes(opts.hidden.minSizeBytes)} hidden (${formatBytes(opts.hidden.bytes)}) · --min-size 0 shows them`))
   lines.push('', c.bold(`reclaimable: ${formatBytes(selected)}`))
   return lines.join('\n')
 }

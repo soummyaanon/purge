@@ -35,6 +35,11 @@ test('emits no ANSI escapes when color is off', () => {
   assert.ok(!/\x1b\[/.test(out), 'ANSI escapes present with color disabled')
 })
 
+test('reports items hidden below the size floor', () => {
+  const out = renderReport([item()], { ...NO_COLOR, hidden: { count: 3, bytes: 2048, minSizeBytes: 10 * 1024 * 1024 } })
+  assert.match(out, /3 items under 10 MB hidden \(2 KB\) · --min-size 0 shows them/)
+})
+
 test('json output is parseable and carries the fields the spec documents', () => {
   const parsed = JSON.parse(renderJson([item()])) as {
     reclaimableBytes: number

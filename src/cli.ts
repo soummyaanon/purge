@@ -135,6 +135,7 @@ async function main(argv: string[]): Promise<number> {
     }
   }
 
+  let hidden = { count: 0, bytes: 0, minSizeBytes: opts.minSizeBytes }
   const candidates = await scan(
     {
       home, staleDays: opts.staleDays, now: Date.now(),
@@ -144,6 +145,7 @@ async function main(argv: string[]): Promise<number> {
     {
       groups: opts.groups, minSizeBytes: opts.minSizeBytes,
       onProgress: (done, bytes) => { sized = done; sizedBytes = bytes },
+      onHidden: (count, bytes) => { hidden = { count, bytes, minSizeBytes: opts.minSizeBytes } },
     },
   )
 
@@ -178,7 +180,7 @@ async function main(argv: string[]): Promise<number> {
 
   if (opts.json) { process.stdout.write(`${renderJson(reviewed)}\n`); return anySelectable ? 0 : 2 }
   if (opts.dryRun || !anySelectable) {
-    process.stdout.write(`${renderReport(reviewed, { color, home })}\n`)
+    process.stdout.write(`${renderReport(reviewed, { color, home, hidden })}\n`)
     if (anySelectable) process.stdout.write('\nrun `purge` to pick what to delete\n')
     else process.stdout.write('\nnothing here is reclaimable — the rows above are for review only\n')
     return anySelectable ? 0 : 2
@@ -191,7 +193,7 @@ async function main(argv: string[]): Promise<number> {
       process.stderr.write('purge: not a terminal — use --yes or --dry-run\n')
       return 1
     }
-    const picked = await review(reviewed)
+    const picked = await review(reviewed, hidden)
     if (picked === null) { process.stdout.write('\ncancelled. nothing deleted.\n'); return 0 }
     chosen = picked
   }
