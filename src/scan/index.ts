@@ -17,13 +17,14 @@ import { discoverScanner } from './discover.ts'
 import { logsScanner } from './logs.ts'
 import { agentsScanner } from './agents.ts'
 import { heavyScanner } from './heavy.ts'
+import { electronScanner } from './electron.ts'
 
 const WALK_SCANNERS: WalkScanner[] = [
   buildsScanner, nodeModulesScanner, cargoScanner, pythonScanner,
 ]
 
 const PATH_SCANNERS: PathScanner[] = [
-  pkgCacheScanner, xcodeScanner, editorsScanner, browsersScanner, orphansScanner,
+  pkgCacheScanner, xcodeScanner, editorsScanner, browsersScanner, electronScanner, orphansScanner,
   sysCachesScanner, logsScanner, agentsScanner, heavyScanner,
   // last on purpose: discovery dedupes against everything claimed above
   discoverScanner,

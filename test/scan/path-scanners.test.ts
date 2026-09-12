@@ -7,6 +7,7 @@ import { pkgCacheScanner } from '../../src/scan/pkg-cache.ts'
 import { xcodeScanner } from '../../src/scan/xcode.ts'
 import { editorsScanner } from '../../src/scan/editors.ts'
 import { browsersScanner } from '../../src/scan/browsers.ts'
+import { electronScanner } from '../../src/scan/electron.ts'
 import type { ScanContext } from '../../src/scan/scanner.ts'
 
 async function fakeHome(dirs: string[]): Promise<ScanContext> {
@@ -76,4 +77,15 @@ test('finds browser caches per profile and marks service workers', async () => {
   assert.ok(sw, 'service worker directory not found')
   assert.equal(sw.note, 'may hold offline app data')
   assert.ok(!got.some((c) => c.path.endsWith('Login Data')), 'browser profile data must never be claimed')
+})
+
+test('finds Electron partition caches without claiming persistent data', async () => {
+  const ctx = await fakeHome([
+    'Library/Application Support/Slack/Partitions/work/Cache',
+    'Library/Application Support/Slack/Partitions/work/Code Cache',
+    'Library/Application Support/Slack/Partitions/work/IndexedDB',
+  ])
+  const got = await electronScanner.probe(ctx)
+  assert.deepEqual(got.map((c) => c.label).sort(), ['Slack work Cache', 'Slack work Code Cache'])
+  assert.ok(!got.some((c) => c.path.endsWith('IndexedDB')))
 })
