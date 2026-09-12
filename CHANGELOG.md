@@ -4,6 +4,16 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semver](https://semver.org).
 
+## [0.8.1] - 2026-09-12
+
+### Changed
+- Release workflow: the Homebrew bump job waits up to 20 minutes for npm's
+  CDN to serve a freshly published tarball (v0.8.0 took over ten), strips
+  stray whitespace from the tap token and re-masks it, refuses a secret
+  that is not shaped like a GitHub token with a plain message, and can be
+  run by hand via `workflow_dispatch` for an already-published version.
+  No code changes.
+
 ## [0.8.0] - 2026-09-12
 
 ### Added
