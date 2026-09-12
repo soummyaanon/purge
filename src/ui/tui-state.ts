@@ -17,6 +17,7 @@ export type TuiState = {
   filter: string
   /** True while the user is typing in the filter line. */
   filtering: boolean
+  hidden?: { count: number; bytes: number; minSizeBytes: number }
 }
 
 function matches(it: Reviewed, filter: string): boolean {
@@ -67,12 +68,12 @@ function rebuilt(s: TuiState, over: Partial<TuiState>): TuiState {
   return { ...next, rows, cursor: clamp(next.cursor, rows) }
 }
 
-export function initState(items: Reviewed[]): TuiState {
+export function initState(items: Reviewed[], hidden?: TuiState['hidden']): TuiState {
   const rows = buildRows(items, [], '')
   const cursor = rows.findIndex((r) => r.kind === 'item')
   return {
     items, rows, cursor: cursor === -1 ? 0 : cursor, done: 'pending',
-    collapsed: [], filter: '', filtering: false,
+    collapsed: [], filter: '', filtering: false, hidden,
   }
 }
 
@@ -242,6 +243,7 @@ export function renderFrame(
   }
 
   lines.push('')
+  if (s.hidden?.count) lines.push(paint(C.dim, `  ${s.hidden.count} items under ${formatBytes(s.hidden.minSizeBytes)} hidden (${formatBytes(s.hidden.bytes)}) · --min-size 0 shows them`))
   if (s.filtering || s.filter !== '') {
     lines.push(`  ${paint(C.accent, '/')} ${s.filter}${s.filtering ? paint('7', ' ') : ''}`)
   }

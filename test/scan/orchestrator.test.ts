@@ -40,6 +40,15 @@ test('drops candidates below the size floor', async () => {
   assert.deepEqual(got, [])
 })
 
+test('reports candidates hidden by the size floor', async () => {
+  const ctx = await home()
+  await fill(path.join(ctx.home, 'proj', '.next'), 100)
+  let hidden: [number, number] = [0, 0]
+  await scan(ctx, { groups: ['builds'], minSizeBytes: 10 * 1024 * 1024, onHidden: (count, bytes) => { hidden = [count, bytes] } })
+  assert.equal(hidden[0], 1)
+  assert.ok(hidden[1] >= 100)
+})
+
 test('does not descend into a directory it already claimed', async () => {
   const ctx = await home()
   await fill(path.join(ctx.home, 'proj', '.next', 'cache', 'dist'), 100_000)
