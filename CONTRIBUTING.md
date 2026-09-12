@@ -53,9 +53,11 @@ src/
 3. Register it in `src/scan/index.ts` and, if it's a new group, add the
    group to `src/types.ts` and the headers in `src/ui/render.ts`.
 4. Ask: can this path hold data the user cannot regenerate? If yes, add a
-   pattern to `src/guard/fragile.ts` (downgrade) or make the group
-   report-only in `src/guard/report-only.ts`. When in doubt, downgrade —
-   an unchecked row costs the user one keypress; a lost file costs trust.
+   pattern to `src/guard/fragile.ts` (downgrade: unchecked, warned, still
+   bulk-toggleable) or put it in the `heavy` group and give it a warning in
+   `src/guard/danger.ts` (danger: unchecked, warned, never bulk-toggled).
+   When in doubt, downgrade — an unchecked row costs the user one keypress;
+   a lost file costs trust.
 
 ## Style
 
@@ -67,6 +69,9 @@ src/
 
 ## Releasing (maintainers)
 
-Bump `VERSION` in `src/cli.ts` and `version` in `package.json`, update
-`CHANGELOG.md`, then tag `vX.Y.Z` and push the tag — the release workflow
-runs the full suite and publishes to npm with provenance.
+Bump `version` in `package.json` (the CLI reads it at build time), add a
+`## [X.Y.Z] - YYYY-MM-DD` section to `CHANGELOG.md`, commit, then tag
+`vX.Y.Z` and push the tag. The release workflow runs the full suite,
+publishes to npm with provenance, creates a GitHub Release whose notes are
+that changelog section, and — when the `TAP_GITHUB_TOKEN` secret is set —
+bumps the Homebrew formula in `soummyaanon/homebrew-tap`.

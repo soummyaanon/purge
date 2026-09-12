@@ -17,6 +17,7 @@ import { discoverScanner } from './discover.ts'
 import { logsScanner } from './logs.ts'
 import { agentsScanner } from './agents.ts'
 import { heavyScanner } from './heavy.ts'
+import { electronScanner } from './electron.ts'
 
 const WALK_SCANNERS: WalkScanner[] = [
   buildsScanner, nodeModulesScanner, cargoScanner, pythonScanner,
@@ -25,6 +26,8 @@ const WALK_SCANNERS: WalkScanner[] = [
 const PATH_SCANNERS: PathScanner[] = [
   pkgCacheScanner, xcodeScanner, editorsScanner, browsersScanner, orphansScanner,
   sysCachesScanner, logsScanner, agentsScanner, heavyScanner,
+  // after orphans on purpose: an app offered whole is not also offered in pieces
+  electronScanner,
   // last on purpose: discovery dedupes against everything claimed above
   discoverScanner,
 ]
@@ -46,6 +49,13 @@ const SKIP_UNDER_HOME = [
   '.vscode', '.cursor', '.claude', '.codex', '.windsurf', '.local', '.rustup', '.cargo/registry',
   // owned by the caches scanner; the walker would claim venvs buried inside it
   '.cache',
+  // package caches the pkg scanner offers whole. Walking them is slow (the
+  // npm cache alone is tens of thousands of directories) and every `dist/`
+  // or `node_modules` inside is part of a download, not a project.
+  '.npm', '.bun', '.gradle', '.m2', '.pub-cache', '.nuget', '.composer', '.cocoapods', '.yarn',
+  'go/pkg/mod', 'miniconda3', 'anaconda3', 'miniforge3', 'mambaforge', '.conda',
+  // heavy items the heavy scanner offers whole
+  '.android', '.ollama', '.lmstudio', '.orbstack',
 ]
 
 async function sizeAll(

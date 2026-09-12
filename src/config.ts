@@ -8,6 +8,8 @@ export type Config = {
   staleDays?: number
   minSize?: number
   groups?: Group[]
+  /** Always move to ~/.Trash instead of deleting. */
+  trash?: boolean
 }
 
 const EMPTY: Config = { keep: [] }
@@ -47,6 +49,7 @@ export async function loadConfig(home: string): Promise<Config> {
   }
   if (typeof src.staleDays === 'number' && src.staleDays >= 0) out.staleDays = src.staleDays
   if (typeof src.minSize === 'number' && src.minSize >= 0) out.minSize = src.minSize
+  if (typeof src.trash === 'boolean') out.trash = src.trash
   if (Array.isArray(src.groups)) {
     const groups = src.groups
       .map((g) => (typeof g === 'string' ? GROUP_ALIASES[g] ?? g : g))

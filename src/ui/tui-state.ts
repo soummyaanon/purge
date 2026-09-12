@@ -190,13 +190,48 @@ export function reduce(s: TuiState, key: string): TuiState {
   }
 }
 
-/** One full screen of output. `height` is the terminal row count. */
+/** Middle-ellipsize so both the start and, mostly, the tail of a path survive. */
+export function ellipsizeMiddle(s: string, max: number): string {
+  if (s.length <= max) return s
+  if (max <= 1) return '…'
+  const tail = Math.ceil((max - 1) * 0.6)
+  const head = max - 1 - tail
+  return `${s.slice(0, head)}…${s.slice(s.length - tail)}`
+}
+
+function cutEnd(s: string, max: number): string {
+  return s.length <= max ? s : `${s.slice(0, Math.max(0, max - 1))}…`
+}
+
+const MIN_PATH = 12
+
+/**
+ * Shrinks one item row to `width` columns. The path gives way first (middle
+ * ellipsis, tail kept); if that leaves too little of it, the note goes; the
+ * warning is cut last because it is the one thing the user must not miss.
+ */
+function fitRow(
+  r: { prefix: string; path: string; note: string; warn: string }, width: number | undefined,
+): { path: string; note: string; warn: string } {
+  if (width === undefined) return r
+  let { note, warn } = r
+  let budget = width - r.prefix.length - note.length - warn.length
+  if (budget < MIN_PATH && note !== '') { budget += note.length; note = '' }
+  if (budget < MIN_PATH && warn !== '') {
+    warn = cutEnd(warn, Math.max(0, width - r.prefix.length - MIN_PATH))
+    budget = width - r.prefix.length - warn.length
+  }
+  return { path: ellipsizeMiddle(r.path, Math.max(1, budget)), note, warn }
+}
+
+/** One full screen of output. `height` is the terminal row count; `width` its columns. */
 export function renderFrame(
-  s: TuiState, height: number, opts: { color: boolean; home: string },
+  s: TuiState, height: number, opts: { color: boolean; home: string; width?: number },
 ): string {
   const paint = opts.color
     ? (code: string, str: string) => `\x1b[${code}m${str}\x1b[0m`
     : (_code: string, str: string) => str
+  const fit = (str: string) => (opts.width === undefined ? str : cutEnd(str, opts.width))
   // The purge palette (see progress.ts INK): cyan headers, blue sizes, gray
   // chrome, a deep-blue bar for the cursor instead of harsh reverse video.
   const C = {
@@ -222,33 +257,47 @@ export function renderFrame(
       const inGroup = bulkToggleable(s, row.group)
       const on = inGroup.filter((it) => it.selected).length
       const box = inGroup.length === 0 ? '[-]' : on === 0 ? '[ ]' : on === inGroup.length ? '[x]' : '[~]'
-      const text = `${mark} ${box} ${HEADERS[row.group]}  ${formatBytes(row.bytes)} (${row.count})`
-      lines.push(here ? paint(C.cursor, text) : `${paint(C.header, `${mark} ${box} ${HEADERS[row.group]}`)}  ${paint(C.chrome, `${formatBytes(row.bytes)} (${row.count})`)}`)
+      const name = `${mark} ${box} ${HEADERS[row.group]}`
+      const stats = `${formatBytes(row.bytes)} (${row.count})`
+      const text = fit(`${name}  ${stats}`)
+      if (here) lines.push(paint(C.cursor, text))
+      else if (text.length < `${name}  ${stats}`.length) lines.push(paint(C.header, text))
+      else lines.push(`${paint(C.header, name)}  ${paint(C.chrome, stats)}`)
       continue
     }
     const it = s.items[row.index]
     if (it === undefined) continue
     // '[-]' marks a row that exists for information only and cannot be checked.
     const box = !it.selectable ? '[-]' : it.selected ? '[x]' : '[ ]'
+    const size = formatBytes(it.bytes).padStart(9)
+    const prefix = `   ${box} ${size}  `
     // Same de-duplication as renderReport: a warning that repeats the note
     // verbatim must not print the text twice.
-    const note = it.note && !it.warnings.includes(it.note) ? paint(C.dim, `  ${it.note}`) : ''
-    const warn = it.warnings.length > 0 ? paint(C.warn, `  ! ${it.warnings.join(', ')}`) : ''
+    const r = fitRow({
+      prefix,
+      path: tildify(it.path, opts.home),
+      note: it.note && !it.warnings.includes(it.note) ? `  ${it.note}` : '',
+      warn: it.warnings.length > 0 ? `  ! ${it.warnings.join(', ')}` : '',
+    }, opts.width)
     if (here) {
-      lines.push(paint(C.cursor, `   ${box} ${formatBytes(it.bytes).padStart(9)}  ${tildify(it.path, opts.home)}${it.note && !it.warnings.includes(it.note) ? `  ${it.note}` : ''}${it.warnings.length > 0 ? `  ! ${it.warnings.join(', ')}` : ''}`))
+      lines.push(paint(C.cursor, `${prefix}${r.path}${r.note}${r.warn}`))
     } else {
-      lines.push(`   ${paint(it.selected ? C.accent : C.chrome, box)} ${paint(C.size, formatBytes(it.bytes).padStart(9))}  ${tildify(it.path, opts.home)}${note}${warn}`)
+      lines.push(
+        `   ${paint(it.selected ? C.accent : C.chrome, box)} ${paint(C.size, size)}  ${r.path}`
+        + (r.note ? paint(C.dim, r.note) : '') + (r.warn ? paint(C.warn, r.warn) : ''),
+      )
     }
   }
 
   lines.push('')
   if (s.filtering || s.filter !== '') {
-    lines.push(`  ${paint(C.accent, '/')} ${s.filter}${s.filtering ? paint('7', ' ') : ''}`)
+    const query = opts.width === undefined ? s.filter : cutEnd(s.filter, Math.max(1, opts.width - 5))
+    lines.push(`  ${paint(C.accent, '/')} ${query}${s.filtering ? paint('7', ' ') : ''}`)
   }
-  lines.push(paint(C.dim, s.filtering
+  lines.push(paint(C.dim, fit(s.filtering
     ? '  type to filter   ↑/↓ move   enter keep   esc clear'
-    : '  tab box   space toggle   ←/→ fold   a all   / filter   g/G ends   enter go   q quit'))
+    : '  tab box   space toggle   ←/→ fold   a all   / filter   g/G ends   enter go   q quit')))
   const selected = s.items.filter((i) => i.selected && i.selectable)
-  lines.push(paint(C.accent, `  selected: ${selected.length} items, ${formatBytes(selectedBytes(s))}`))
+  lines.push(paint(C.accent, fit(`  selected: ${selected.length} items, ${formatBytes(selectedBytes(s))}`)))
   return lines.join('\n')
 }

@@ -30,3 +30,14 @@ test('totals lifetime reclaimed space', () => {
 test('says so when there is no history yet', () => {
   assert.match(renderHistory([], NO_COLOR), /no runs yet/)
 })
+
+test('marks trash-mode and undone runs, and leaves undone runs out of the lifetime total', () => {
+  const out = renderHistory([
+    { ...run('2026-09-12T11:00:00Z', 1024 ** 3, ['builds']), mode: 'trash' },
+    { ...run('2026-09-12T10:00:00Z', 1024 ** 3, ['pkg']), mode: 'trash', undoneAt: '2026-09-12T10:30:00Z' },
+    run('2026-09-01T10:00:00Z', 1024 ** 3, ['xcode']),
+  ], NO_COLOR)
+  assert.match(out, /trash/)
+  assert.match(out, /undone/)
+  assert.match(out, /lifetime reclaimed: 2\.0 GB/)
+})

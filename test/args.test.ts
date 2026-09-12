@@ -89,3 +89,18 @@ test('accepts the legacy group name claude as an alias for agents', () => {
   assert.ok(!('error' in o), 'claude must not be an unknown group')
   if (!('error' in o)) assert.deepEqual(o.groups, ['agents'])
 })
+
+test('--trash moves instead of deleting', () => {
+  assert.equal(ok([]).trash, false)
+  assert.equal(ok(['--trash']).trash, true)
+})
+
+test('undo is a command', () => {
+  assert.equal(ok(['undo']).command, 'undo')
+})
+
+test('config can turn trash mode on, and a flag cannot turn it off', () => {
+  const o = parseArgs([], { trash: true })
+  assert.ok(!('error' in o))
+  assert.equal(o.trash, true)
+})

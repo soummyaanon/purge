@@ -106,3 +106,13 @@ test('sizing progress reports the count and cumulative bytes', async () => {
   assert.equal(seen.at(-1)?.[0], 2)
   assert.ok((seen.at(-1)?.[1] ?? 0) >= 110_000, `cumulative bytes missing: ${seen.at(-1)?.[1]}`)
 })
+
+test('the walker never enters package caches, so their bundled dist dirs are not claimed twice', async () => {
+  const ctx = await home()
+  for (const rel of ['go/pkg/mod/github.com/x/y@v1/dist', '.npm/_npx/abc/node_modules', '.m2/repository/org/x/dist']) {
+    await fill(path.join(ctx.home, rel), 50_000)
+    await fs.writeFile(path.join(ctx.home, rel, '..', 'package.json'), '{}')
+  }
+  const got = await scan({ ...ctx, staleDays: 0 }, { groups: ['builds'], minSizeBytes: 0 })
+  assert.deepEqual(got, [], `walker claimed inside a package cache: ${got.map((c) => c.path).join(', ')}`)
+})

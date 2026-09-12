@@ -75,11 +75,38 @@ export function renderJson(items: Reviewed[]): string {
   )
 }
 
-export function renderSummary(m: RunManifest, opts: { color: boolean }): string {
+export const REPO_URL = 'github.com/soummyaanon/purge'
+
+/**
+ * `runCount` is how many manifests exist after this run. The star line shows
+ * on a user's first three runs and then never again — one ask, at the one
+ * moment the tool has visibly earned it, and no state beyond the manifests
+ * purge already writes.
+ */
+export function renderSummary(
+  m: RunManifest,
+  opts: { color: boolean; home?: string; runCount?: number },
+): string {
   const c = palette(opts.color)
-  return [
+  const home = opts.home ?? ''
+  const trash = m.mode === 'trash'
+  const lines = [
     '',
-    c.green(c.bold(`reclaimed: ${formatBytes(m.freedBytes)}`)),
-    c.dim('restart any browser or editor that was running.'),
-  ].join('\n')
+    c.green(c.bold(`${trash ? 'moved to Trash' : 'reclaimed'}: ${formatBytes(m.freedBytes)}`)),
+  ]
+  if (trash) lines.push(c.dim('empty the Trash to free the space · `purge undo` puts everything back.'))
+  lines.push(c.dim('restart any browser or editor that was running.'))
+
+  const failed = m.failed ?? []
+  if (failed.length > 0) {
+    lines.push('', c.yellow(`could not delete ${failed.length} item(s):`))
+    for (const f of failed) {
+      lines.push(`  ${formatBytes(f.bytes).padStart(9)}  ${c.cyan(tildify(f.path, home))}  ${c.dim(f.reason)}`)
+    }
+  }
+
+  if (opts.runCount !== undefined && opts.runCount <= 3 && m.freedBytes > 0) {
+    lines.push('', c.dim(`if purge helped, a ★ on ${REPO_URL} helps others find it.`))
+  }
+  return lines.join('\n')
 }

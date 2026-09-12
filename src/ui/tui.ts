@@ -68,7 +68,9 @@ export function review(items: Reviewed[]): Promise<Reviewed[] | null> {
       const color = out.isTTY === true
       // Wordmark takes 3 rows (2 letters + 1 blank); the frame gets the rest.
       out.write(`${shimmerWordmark(tick, color)}\n\n`)
-      out.write(renderFrame(state, Math.max((out.rows ?? 24) - 3, 8), { color, home: os.homedir() }))
+      out.write(renderFrame(state, Math.max((out.rows ?? 24) - 3, 8), {
+        color, home: os.homedir(), width: out.columns ?? 80,
+      }))
     }
 
     // The shimmer sweep. Only the wordmark animates, and only on a real TTY.

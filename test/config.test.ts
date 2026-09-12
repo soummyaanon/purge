@@ -52,3 +52,13 @@ test('a groups list of only unknown names narrows to nothing, never to everythin
   const c = await loadConfig(await home(JSON.stringify({ groups: ['bogus'] })))
   assert.deepEqual(c.groups, [], 'an explicit-but-invalid groups list must stay restrictive')
 })
+
+test('reads the trash switch', async () => {
+  const c = await loadConfig(await home(JSON.stringify({ trash: true })))
+  assert.equal(c.trash, true)
+})
+
+test('ignores a trash value that is not a boolean', async () => {
+  const c = await loadConfig(await home(JSON.stringify({ trash: 'yes' })))
+  assert.equal(c.trash, undefined)
+})

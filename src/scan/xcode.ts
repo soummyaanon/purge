@@ -12,6 +12,8 @@ const TARGETS: Array<[string, string, string | undefined]> = [
   ['Library/Developer/Xcode/iOS DeviceSupport', 'iOS DeviceSupport', 'needs that exact device + iOS build to rebuild'],
   ['Library/Developer/Xcode/watchOS DeviceSupport', 'watchOS DeviceSupport', 'needs that exact device + OS build to rebuild'],
   ['Library/Developer/CoreSimulator/Caches', 'Simulator caches', undefined],
+  // The simulators SwiftUI previews boot. Rebuilt the next time a canvas opens.
+  ['Library/Developer/Xcode/UserData/Previews', 'Xcode Previews', undefined],
 ]
 
 export const xcodeScanner: PathScanner = {

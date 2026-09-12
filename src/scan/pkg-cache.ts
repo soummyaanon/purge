@@ -21,6 +21,24 @@ export const PKG_CACHE_PATHS: Array<[string, string]> = [
   ['Library/Caches/deno', 'deno cache'],
   ['.cargo/registry/cache', 'cargo registry cache'],
   ['.gradle/caches', 'gradle cache'],
+  // Only the download half of the Go module cache. The extracted modules
+  // under ~/go/pkg/mod/<module>@<ver> are made read-only by the go tool and
+  // a partial rm would leave a cache Go itself cannot repair — `go clean
+  // -modcache` is the tool for those.
+  ['go/pkg/mod/cache', 'Go module download cache'],
+  ['.m2/repository', 'Maven repository'],
+  ['.cocoapods/repos', 'CocoaPods specs'],
+  ['.pub-cache', 'pub cache'],
+  ['.nuget/packages', 'NuGet packages'],
+  ['.composer/cache', 'Composer cache'],
+  ['.yarn/berry/cache', 'Yarn Berry cache'],
+  // conda's package cache. Environments hard-link into it, so their files
+  // survive its removal; `conda clean --all` does the same thing.
+  ['miniconda3/pkgs', 'conda packages'],
+  ['anaconda3/pkgs', 'conda packages'],
+  ['miniforge3/pkgs', 'conda packages'],
+  ['mambaforge/pkgs', 'conda packages'],
+  ['.conda/pkgs', 'conda packages'],
 ]
 
 export const pkgCacheScanner: PathScanner = {

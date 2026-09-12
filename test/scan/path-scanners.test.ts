@@ -77,3 +77,27 @@ test('finds browser caches per profile and marks service workers', async () => {
   assert.equal(sw.note, 'may hold offline app data')
   assert.ok(!got.some((c) => c.path.endsWith('Login Data')), 'browser profile data must never be claimed')
 })
+
+test('finds the Go, Maven, CocoaPods, pub, NuGet, Composer and Yarn Berry caches', async () => {
+  const ctx = await fakeHome([
+    'go/pkg/mod/cache', '.m2/repository', '.cocoapods/repos', '.pub-cache',
+    '.nuget/packages', '.composer/cache', '.yarn/berry/cache',
+  ])
+  const got = await pkgCacheScanner.probe(ctx)
+  assert.deepEqual(got.map((c) => c.label).sort(), [
+    'CocoaPods specs', 'Composer cache', 'Go module download cache', 'Maven repository',
+    'NuGet packages', 'Yarn Berry cache', 'pub cache',
+  ])
+})
+
+test('finds the conda package cache wherever the distribution lives', async () => {
+  const ctx = await fakeHome(['miniconda3/pkgs', '.conda/pkgs'])
+  const got = await pkgCacheScanner.probe(ctx)
+  assert.equal(got.filter((c) => c.label === 'conda packages').length, 2)
+})
+
+test('claims SwiftUI preview simulators alongside DerivedData', async () => {
+  const ctx = await fakeHome(['Library/Developer/Xcode/UserData/Previews'])
+  const got = await xcodeScanner.probe(ctx)
+  assert.deepEqual(got.map((c) => c.label), ['Xcode Previews'])
+})

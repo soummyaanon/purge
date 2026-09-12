@@ -87,3 +87,39 @@ test('renders dangerous items unchecked, outside the reclaimable total', () => {
   // 1_181_116_006 alone is 1.1 GB; adding the 500 MB orphan would read 1.6 GB.
   assert.match(out, /reclaimable: 1\.1 GB/)
 })
+
+function freed(freedBytes: number): RunManifest {
+  return { ts: '2026-09-12T10:00:00Z', version: '0.8.0', freedBytes, groups: ['builds'], items: [] }
+}
+
+test('summary asks for a star on the first three runs only', () => {
+  const REPO = /github\.com\/soummyaanon\/purge/
+  assert.match(renderSummary(freed(1024 ** 3), { ...NO_COLOR, runCount: 1 }), REPO)
+  assert.match(renderSummary(freed(1024 ** 3), { ...NO_COLOR, runCount: 3 }), REPO)
+  assert.doesNotMatch(renderSummary(freed(1024 ** 3), { ...NO_COLOR, runCount: 4 }), REPO)
+})
+
+test('summary never asks for a star when the run count is unknown or nothing was freed', () => {
+  const REPO = /github\.com/
+  assert.doesNotMatch(renderSummary(freed(1024 ** 3), NO_COLOR), REPO)
+  assert.doesNotMatch(renderSummary(freed(0), { ...NO_COLOR, runCount: 1 }), REPO)
+})
+
+test('summary names every path that could not be deleted, with its reason', () => {
+  const m: RunManifest = {
+    ...freed(0),
+    failed: [{ path: '/Users/x/Library/Caches/Held', bytes: 4096, group: 'caches', reason: 'EPERM' }],
+  }
+  const out = renderSummary(m, NO_COLOR)
+  assert.match(out, /could not delete/)
+  assert.match(out, /~\/Library\/Caches\/Held/)
+  assert.match(out, /EPERM/)
+})
+
+test('trash-mode summary says the space is in the Trash and how to get it back', () => {
+  const m: RunManifest = { ...freed(1024 ** 3), mode: 'trash' }
+  const out = renderSummary(m, NO_COLOR)
+  assert.match(out, /moved to Trash: 1\.0 GB/)
+  assert.match(out, /purge undo/)
+  assert.doesNotMatch(out, /^reclaimed:/m)
+})

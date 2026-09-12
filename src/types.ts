@@ -61,7 +61,20 @@ export type Reviewed = Candidate & {
 }
 
 /** One line in a run manifest. */
-export type ReapedItem = { path: string; bytes: number; group: Group }
+export type ReapedItem = {
+  path: string
+  bytes: number
+  group: Group
+  /** Where a --trash run moved it. Absent when it was deleted for real. */
+  trashedTo?: string
+}
+
+/**
+ * A path the user chose that the reaper could not remove: permission denied,
+ * a file held open, a directory that refilled mid-delete. Recorded so the
+ * summary can name it instead of letting it vanish into "skipped".
+ */
+export type FailedItem = ReapedItem & { reason: string }
 
 export type RunManifest = {
   ts: string
@@ -69,4 +82,10 @@ export type RunManifest = {
   freedBytes: number
   groups: Group[]
   items: ReapedItem[]
+  /** Absent in manifests written before v0.8. */
+  failed?: FailedItem[]
+  /** How items left: deleted, or moved to ~/.Trash. Absent (pre-v0.8) means 'rm'. */
+  mode?: 'rm' | 'trash'
+  /** Set by `purge undo` once this run's items were moved back. */
+  undoneAt?: string
 }

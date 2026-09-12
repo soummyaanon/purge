@@ -4,12 +4,14 @@ on:
     tags: ['v*']
 
 permissions:
-  contents: read
+  contents: write   # GitHub Release
   id-token: write   # npm provenance
 
 jobs:
   publish:
     runs-on: macos-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -18,6 +20,63 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
       - run: npm ci
       - run: npm run typecheck && npm test && npm run build
+
+      - name: version must match the tag
+        id: meta
+        run: |
+          pkg=$(node -p "require('./package.json').version")
+          tag="${GITHUB_REF_NAME#v}"
+          if [ "$pkg" != "$tag" ]; then
+            echo "package.json is $pkg but the tag is v$tag"; exit 1
+          fi
+          echo "version=$pkg" >> "$GITHUB_OUTPUT"
+
       - run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: release notes from CHANGELOG.md
+        run: |
+          v="${{ steps.meta.outputs.version }}"
+          # The section for this version: from its heading to the next "## [".
+          awk -v v="$v" '
+            $0 ~ "^## \\[" v "\\]" { on=1; next }
+            on && /^## \[/ { exit }
+            on { print }
+          ' CHANGELOG.md > notes.md
+          if [ ! -s notes.md ]; then
+            echo "No CHANGELOG.md section for $v"; exit 1
+          fi
+          printf '\n---\n\n```\nnpm i -g purge-cli@%s\nbrew install soummyaanon/tap/purge\n```\n' "$v" >> notes.md
+
+      - name: GitHub Release
+        run: gh release create "$GITHUB_REF_NAME" --title "purge $GITHUB_REF_NAME" --notes-file notes.md
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  homebrew:
+    needs: publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: bump the tap formula
+        env:
+          TAP_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+          VERSION: ${{ needs.publish.outputs.version }}
+        run: |
+          if [ -z "$TAP_TOKEN" ]; then
+            echo "TAP_GITHUB_TOKEN not set — skipping the Homebrew bump"; exit 0
+          fi
+          url="https://registry.npmjs.org/purge-cli/-/purge-cli-${VERSION}.tgz"
+          # npm can take a moment to serve a freshly published tarball.
+          for i in 1 2 3 4 5 6; do
+            if curl -fsSL "$url" -o purge.tgz; then break; fi
+            sleep 20
+          done
+          sha=$(shasum -a 256 purge.tgz | cut -d' ' -f1)
+          git clone "https://x-access-token:${TAP_TOKEN}@github.com/soummyaanon/homebrew-tap.git" tap
+          cd tap
+          sed -i -E "s#(url \")[^\"]+(\")#\1${url}\2#" Formula/purge.rb
+          sed -i -E "s#(sha256 \")[^\"]+(\")#\1${sha}\2#" Formula/purge.rb
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "purge ${VERSION}" && git push

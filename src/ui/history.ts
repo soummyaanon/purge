@@ -17,9 +17,11 @@ export function renderHistory(runs: RunManifest[], opts: { color: boolean }): st
 
   const lines = ['']
   for (const r of runs) {
-    lines.push(`  ${shortDate(r.ts)}  ${formatBytes(r.freedBytes).padStart(9)}   ${dim(r.groups.join(', '))}`)
+    const tag = r.undoneAt !== undefined ? '  undone' : r.mode === 'trash' ? '  trash' : ''
+    lines.push(`  ${shortDate(r.ts)}  ${formatBytes(r.freedBytes).padStart(9)}   ${dim(r.groups.join(', '))}${dim(tag)}`)
   }
-  const lifetime = runs.reduce((n, r) => n + r.freedBytes, 0)
+  // An undone run put everything back, so it reclaimed nothing net.
+  const lifetime = runs.filter((r) => r.undoneAt === undefined).reduce((n, r) => n + r.freedBytes, 0)
   lines.push('', bold(`  lifetime reclaimed: ${formatBytes(lifetime)}`), '')
   return lines.join('\n')
 }
