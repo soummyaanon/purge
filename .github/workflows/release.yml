@@ -76,9 +76,18 @@ jobs:
           # A secret pasted with a trailing newline makes curl reject the clone
           # URL as malformed. Strip every whitespace character before use.
           TAP_TOKEN="$(printf '%s' "$TAP_TOKEN" | tr -d '[:space:]')"
+          # The stripped value differs from the stored secret, so re-mask it
+          # or a later error message could print it.
+          echo "::add-mask::$TAP_TOKEN"
           if [ -z "$TAP_TOKEN" ]; then
             echo "TAP_GITHUB_TOKEN not set — skipping the Homebrew bump"; exit 0
           fi
+          # Fail here, with a plain message, rather than inside a URL error
+          # that would echo whatever the secret actually holds.
+          case "$TAP_TOKEN" in
+            github_pat_*|ghp_*|gho_*|ghs_*) ;;
+            *) echo "TAP_GITHUB_TOKEN does not look like a GitHub token (expected github_pat_… or ghp_…). Re-set the secret."; exit 1 ;;
+          esac
           url="https://registry.npmjs.org/purge-cli/-/purge-cli-${VERSION}.tgz"
           # npm's CDN can take several minutes to serve a freshly published
           # tarball (v0.8.0 took over ten). Wait up to 20 minutes.
