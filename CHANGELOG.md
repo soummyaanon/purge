@@ -4,6 +4,20 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semver](https://semver.org).
 
+## [0.8.2] - 2026-09-15
+
+### Added
+- Electron app caches: per-partition Chromium profiles under
+  `<App>/Partitions/<name>/` (Microsoft Teams, Postman, some Slack builds)
+  are judged by the same `Cache` + `Code Cache` signature and offered as
+  `<App> <name> Cache`, `Code Cache`, `GPUCache` and the Dawn shader caches.
+  `Local Storage`, `IndexedDB`, `Session Storage` and `Service Worker` are
+  never touched, as before. (#9, thanks @nightcityblade)
+- The report and the review screen say how many candidates `--min-size`
+  hid and how much they add up to — `312 items under 10 MB hidden (1.2 GB)
+  · --min-size 0 shows them` — so a short list is no longer mistaken for a
+  clean disk. (#10, thanks @nightcityblade)
+
 ## [0.8.1] - 2026-09-12
 
 ### Changed
