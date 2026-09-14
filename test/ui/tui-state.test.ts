@@ -297,3 +297,14 @@ test('without a width nothing is truncated', () => {
   assert.match(frame, /Service Worker\/CacheStorage/)
   assert.doesNotMatch(frame, /…/)
 })
+
+test('the hidden-by-size footer displaces a body row instead of growing the frame', () => {
+  const many: Reviewed[] = Array.from({ length: 40 }, (_, i) => ({
+    path: `/h/p${i}/.next`, label: '.next', group: 'builds', bytes: 1000, selected: true, selectable: true, warnings: [],
+  }))
+  const hidden = { count: 12, bytes: 5_000_000, minSizeBytes: 10 * 1024 * 1024 }
+  const plain = renderFrame(initState(many), 20, { color: false, home: '/h' })
+  const withHidden = renderFrame(initState(many, hidden), 20, { color: false, home: '/h' })
+  assert.match(withHidden, /12 items under 10 MB hidden \(5 MB\) · --min-size 0 shows them/)
+  assert.equal(withHidden.split('\n').length, plain.split('\n').length)
+})

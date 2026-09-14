@@ -240,7 +240,7 @@ export function renderFrame(
     cursor: '48;5;24;38;5;195', accent: '1;38;5;51', warn: '38;5;179',
   }
 
-  const footer = s.filtering || s.filter !== '' ? 5 : 4
+  const footer = (s.filtering || s.filter !== '' ? 5 : 4) + (s.hidden?.count ? 1 : 0)
   const body = Math.max(3, height - footer)
   const start = Math.max(0, Math.min(s.cursor - Math.floor(body / 2), s.rows.length - body))
   const lines: string[] = []
