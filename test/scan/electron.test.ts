@@ -59,3 +59,37 @@ test('survives a home with no Application Support', async () => {
   const ctx = await fakeHome([])
   assert.deepEqual(await electronScanner.probe(ctx, new Set()), [])
 })
+
+test('claims per-partition caches under <App>/Partitions/<name>/ without their app data', async () => {
+  const ctx = await fakeHome([
+    `${AS}/Slack/Partitions/work/Cache`,
+    `${AS}/Slack/Partitions/work/Code Cache`,
+    `${AS}/Slack/Partitions/work/IndexedDB`,
+  ])
+  const got = await electronScanner.probe(ctx, new Set())
+  assert.deepEqual(got.map((c) => c.label).sort(), ['Slack work Cache', 'Slack work Code Cache'])
+  assert.ok(!got.some((c) => c.path.endsWith('IndexedDB')))
+})
+
+test('the root profile and each partition are judged by the same signature rule', async () => {
+  const ctx = await fakeHome([
+    `${AS}/Teams/Cache`, `${AS}/Teams/Code Cache`,
+    `${AS}/Teams/Partitions/msa/Cache`, `${AS}/Teams/Partitions/msa/Code Cache`, `${AS}/Teams/Partitions/msa/GPUCache`,
+    `${AS}/Teams/Partitions/msa/Local Storage`, `${AS}/Teams/Partitions/msa/Service Worker`,
+    `${AS}/Teams/Partitions/leftover/Cache`,   // lone Cache — not a profile
+  ])
+  const got = await electronScanner.probe(ctx, new Set())
+  assert.deepEqual(got.map((c) => c.label).sort(), [
+    'Teams Cache', 'Teams Code Cache', 'Teams msa Cache', 'Teams msa Code Cache', 'Teams msa GPUCache',
+  ])
+  assert.ok(!got.some((c) => /Storage|Service Worker/.test(c.path)), 'partition app data was claimed')
+})
+
+test('a claimed app root hides its partitions too', async () => {
+  const ctx = await fakeHome([
+    `${AS}/Postman/Cache`, `${AS}/Postman/Code Cache`,
+    `${AS}/Postman/Partitions/p1/Cache`, `${AS}/Postman/Partitions/p1/Code Cache`,
+  ])
+  const claimed = new Set([path.join(ctx.home, AS, 'Postman')])
+  assert.deepEqual(await electronScanner.probe(ctx, claimed), [])
+})

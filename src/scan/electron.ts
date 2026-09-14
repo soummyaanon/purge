@@ -12,6 +12,11 @@ import { subdirNames } from './enumerate.ts'
  * both `Cache` AND `Code Cache` present — lets Slack, Discord, Notion, Figma,
  * Postman, Teams and any app purge has never heard of get the same cleaning
  * the editors scanner gives VS Code.
+ *
+ * Some apps (Teams, Postman, some Slack builds) keep extra Chromium profiles
+ * one level down at `<App>/Partitions/<name>/` with the same layout, and
+ * those are often the larger ones. Each partition is judged by the same
+ * signature and yields the same claimable set, labelled `<App> <name> …`.
  */
 
 /** Directories other scanners own. Their group decides what is claimable. */
@@ -37,15 +42,22 @@ export const electronScanner: PathScanner = {
       if (OWNED.has(app)) continue
       const root = path.join(base, app)
       // An orphan scanner already offering the whole folder must not be
-      // shadowed by its own cache subdirs.
+      // shadowed by its own cache subdirs — nor by its partitions'.
       if (claimed?.has(root) === true) continue
-      const subs = await subdirNames(root)
-      if (!SIGNATURE.every((s) => subs.includes(s))) continue
-      for (const sub of CLAIMABLE) {
-        if (!subs.includes(sub)) continue
-        const full = path.join(root, sub)
-        if (claimed?.has(full) === true) continue
-        out.push({ path: full, label: `${app} ${sub}`, group: 'caches' })
+      const partitions = path.join(root, 'Partitions')
+      const profiles: Array<{ dir: string; name: string }> = [{ dir: root, name: app }]
+      for (const p of await subdirNames(partitions)) {
+        profiles.push({ dir: path.join(partitions, p), name: `${app} ${p}` })
+      }
+      for (const { dir, name } of profiles) {
+        const subs = await subdirNames(dir)
+        if (!SIGNATURE.every((s) => subs.includes(s))) continue
+        for (const sub of CLAIMABLE) {
+          if (!subs.includes(sub)) continue
+          const full = path.join(dir, sub)
+          if (claimed?.has(full) === true) continue
+          out.push({ path: full, label: `${name} ${sub}`, group: 'caches' })
+        }
       }
     }
     return out
