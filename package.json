@@ -1,6 +1,6 @@
 {
   "name": "purge-cli",
-  "version": "0.7.1",
+  "version": "0.8.1",
   "description": "Purge the regenerable junk from your Mac — build output, caches, logs.",
   "type": "module",
   "bin": {
@@ -27,9 +27,19 @@
   "keywords": [
     "macos",
     "disk",
+    "disk-space",
     "cleanup",
+    "cleaner",
     "node_modules",
     "cache",
+    "xcode",
+    "derived-data",
+    "docker",
+    "homebrew",
+    "claude-code",
+    "cursor",
+    "developer-tools",
+    "tui",
     "cli",
     "purge"
   ],

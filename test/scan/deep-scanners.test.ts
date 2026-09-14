@@ -162,3 +162,26 @@ test('probes the other coding agents only where they exist', async () => {
     'Copilot CLI logs', 'Gemini CLI tmp', 'aider cache', 'opencode logs',
   ])
 })
+
+test('reports simulators, Android images and emulators, local LLM models and OrbStack as heavy', async () => {
+  const ctx = await fakeHome([
+    'Library/Developer/CoreSimulator/Devices',
+    '.android/avd',
+    'Library/Android/sdk/system-images',
+    '.ollama/models',
+    '.lmstudio/models',
+    '.orbstack/data',
+  ])
+  const got = await heavyScanner.probe(ctx)
+  assert.deepEqual(got.map((c) => c.label).sort(), [
+    'Android emulators', 'Android system images', 'LM Studio models', 'Ollama models',
+    'OrbStack data', 'Simulator devices',
+  ])
+  assert.ok(got.every((c) => c.group === 'heavy'))
+})
+
+test('finds LM Studio models in its newer cache location too', async () => {
+  const ctx = await fakeHome(['.cache/lm-studio/models'])
+  const got = await heavyScanner.probe(ctx)
+  assert.deepEqual(got.map((c) => c.label), ['LM Studio models'])
+})

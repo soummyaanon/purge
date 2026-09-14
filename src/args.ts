@@ -1,9 +1,11 @@
 import { ALL_GROUPS, GROUP_ALIASES, type Group } from './types.ts'
 
 export type Options = {
-  command: 'scan' | 'history' | 'help' | 'version'
+  command: 'scan' | 'history' | 'undo' | 'help' | 'version'
   groups: Group[]
   apply: boolean
+  /** Move to ~/.Trash instead of deleting. Recoverable with `purge undo`. */
+  trash: boolean
   dryRun: boolean
   json: boolean
   last: boolean
@@ -18,6 +20,7 @@ export function parseArgs(argv: string[], defaults: Partial<Options>): Options |
     command: 'scan',
     groups: [],
     apply: false,
+    trash: defaults.trash ?? false,
     dryRun: false,
     json: false,
     last: false,
@@ -29,6 +32,8 @@ export function parseArgs(argv: string[], defaults: Partial<Options>): Options |
     const a = argv[i] as string
     switch (a) {
       case '-y': case '--yes': o.apply = true; break
+      case '--trash': o.trash = true; break
+      case 'undo': o.command = 'undo'; break
       case '--dry-run': o.dryRun = true; break
       case '--json': o.json = true; break
       case '--last': o.last = true; break

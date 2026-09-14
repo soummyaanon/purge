@@ -252,3 +252,59 @@ test('tab hops between item boxes, skipping headers and wrapping', () => {
   s = reduce(s, 'prev-item')
   assert.equal(s.cursor, 4, 'shift+tab must wrap backwards')
 })
+
+const ANSI = /\x1b\[[0-9;]*m/g
+const LONG = '/h/Library/Application Support/Some Very Long Application Name/Profiles/Default Profile/Service Worker/CacheStorage'
+
+function longItems(): Reviewed[] {
+  return [
+    { path: LONG, label: 'x', group: 'browsers', bytes: 123_456_789, selected: false, selectable: true,
+      note: 'may hold offline app data', warnings: ['may hold offline app data'] },
+    { path: '/h/a/.next', label: '.next', group: 'builds', bytes: 1000, selected: true, selectable: true, warnings: [] },
+  ]
+}
+
+test('every rendered line fits the terminal width', () => {
+  const s = initState(longItems())
+  for (const width of [60, 80, 100]) {
+    const frame = renderFrame(s, 20, { color: false, home: '/h', width })
+    for (const line of frame.split('\n')) {
+      assert.ok(line.length <= width, `line overflows ${width} cols: ${JSON.stringify(line)}`)
+    }
+  }
+})
+
+test('a truncated path keeps its tail, so the user can still tell what it is', () => {
+  const s = initState(longItems())
+  const frame = renderFrame(s, 20, { color: false, home: '/h', width: 80 })
+  assert.match(frame, /…/)
+  assert.match(frame, /CacheStorage/)
+  assert.match(frame, /may hold offline app data/, 'the warning must survive truncation')
+})
+
+test('width is honoured with color on, measured without escape codes', () => {
+  const s = initState(longItems())
+  const frame = renderFrame(s, 20, { color: true, home: '/h', width: 70 })
+  for (const line of frame.split('\n')) {
+    const plain = line.replace(ANSI, '')
+    assert.ok(plain.length <= 70, `line overflows: ${JSON.stringify(plain)}`)
+  }
+})
+
+test('without a width nothing is truncated', () => {
+  const s = initState(longItems())
+  const frame = renderFrame(s, 20, { color: false, home: '/h' })
+  assert.match(frame, /Service Worker\/CacheStorage/)
+  assert.doesNotMatch(frame, /…/)
+})
+
+test('the hidden-by-size footer displaces a body row instead of growing the frame', () => {
+  const many: Reviewed[] = Array.from({ length: 40 }, (_, i) => ({
+    path: `/h/p${i}/.next`, label: '.next', group: 'builds', bytes: 1000, selected: true, selectable: true, warnings: [],
+  }))
+  const hidden = { count: 12, bytes: 5_000_000, minSizeBytes: 10 * 1024 * 1024 }
+  const plain = renderFrame(initState(many), 20, { color: false, home: '/h' })
+  const withHidden = renderFrame(initState(many, hidden), 20, { color: false, home: '/h' })
+  assert.match(withHidden, /12 items under 10 MB hidden \(5 MB\) · --min-size 0 shows them/)
+  assert.equal(withHidden.split('\n').length, plain.split('\n').length)
+})

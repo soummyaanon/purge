@@ -2,14 +2,24 @@ name: release
 on:
   push:
     tags: ['v*']
+  # Re-run only the Homebrew bump for an already-published version, e.g. when
+  # npm took longer than the wait window to serve the tarball.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Already-published version to bump the tap to (e.g. 0.8.0)'
+        required: true
 
 permissions:
-  contents: read
+  contents: write   # GitHub Release
   id-token: write   # npm provenance
 
 jobs:
   publish:
+    if: github.event_name == 'push'
     runs-on: macos-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -18,6 +28,84 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
       - run: npm ci
       - run: npm run typecheck && npm test && npm run build
+
+      - name: version must match the tag
+        id: meta
+        run: |
+          pkg=$(node -p "require('./package.json').version")
+          tag="${GITHUB_REF_NAME#v}"
+          if [ "$pkg" != "$tag" ]; then
+            echo "package.json is $pkg but the tag is v$tag"; exit 1
+          fi
+          echo "version=$pkg" >> "$GITHUB_OUTPUT"
+
       - run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: release notes from CHANGELOG.md
+        run: |
+          v="${{ steps.meta.outputs.version }}"
+          # The section for this version: from its heading to the next "## [".
+          awk -v v="$v" '
+            $0 ~ "^## \\[" v "\\]" { on=1; next }
+            on && /^## \[/ { exit }
+            on { print }
+          ' CHANGELOG.md > notes.md
+          if [ ! -s notes.md ]; then
+            echo "No CHANGELOG.md section for $v"; exit 1
+          fi
+          printf '\n---\n\n```\nnpm i -g purge-cli@%s\nbrew install soummyaanon/tap/purge\n```\n' "$v" >> notes.md
+
+      - name: GitHub Release
+        run: gh release create "$GITHUB_REF_NAME" --title "purge $GITHUB_REF_NAME" --notes-file notes.md
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  homebrew:
+    needs: publish
+    # Runs after a publish, or on its own from workflow_dispatch.
+    if: always() && (needs.publish.result == 'success' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    steps:
+      - name: bump the tap formula
+        env:
+          TAP_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+          VERSION: ${{ github.event.inputs.version || needs.publish.outputs.version }}
+        run: |
+          # A secret pasted with a trailing newline makes curl reject the clone
+          # URL as malformed. Strip every whitespace character before use.
+          TAP_TOKEN="$(printf '%s' "$TAP_TOKEN" | tr -d '[:space:]')"
+          # The stripped value differs from the stored secret, so re-mask it
+          # or a later error message could print it.
+          echo "::add-mask::$TAP_TOKEN"
+          if [ -z "$TAP_TOKEN" ]; then
+            echo "TAP_GITHUB_TOKEN not set — skipping the Homebrew bump"; exit 0
+          fi
+          # Fail here, with a plain message, rather than inside a URL error
+          # that would echo whatever the secret actually holds.
+          case "$TAP_TOKEN" in
+            github_pat_*|ghp_*|gho_*|ghs_*) ;;
+            *) echo "TAP_GITHUB_TOKEN does not look like a GitHub token (expected github_pat_… or ghp_…). Re-set the secret."; exit 1 ;;
+          esac
+          url="https://registry.npmjs.org/purge-cli/-/purge-cli-${VERSION}.tgz"
+          # npm's CDN can take several minutes to serve a freshly published
+          # tarball (v0.8.0 took over ten). Wait up to 20 minutes.
+          for i in $(seq 1 40); do
+            if curl -fsSL "$url" -o purge.tgz; then break; fi
+            echo "tarball not served yet (attempt $i)"; sleep 30
+          done
+          if [ ! -s purge.tgz ]; then
+            echo "npm never served $url — re-run this job later with workflow_dispatch"; exit 1
+          fi
+          sha=$(shasum -a 256 purge.tgz | cut -d' ' -f1)
+          git clone "https://x-access-token:${TAP_TOKEN}@github.com/soummyaanon/homebrew-tap.git" tap
+          cd tap
+          sed -i -E "s#(url \")[^\"]+(\")#\1${url}\2#" Formula/purge.rb
+          sed -i -E "s#(sha256 \")[^\"]+(\")#\1${sha}\2#" Formula/purge.rb
+          if git diff --quiet; then
+            echo "formula already at ${VERSION}"; exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "purge ${VERSION}" && git push

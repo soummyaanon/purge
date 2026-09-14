@@ -6,11 +6,14 @@ import { loadConfig } from './config.ts'
 import { scan } from './scan/index.ts'
 import { applyGuards, type GuardContext } from './guard/index.ts'
 import { reap } from './reap/reaper.ts'
-import { readManifests } from './reap/manifest.ts'
+import { readManifests, readManifestEntries } from './reap/manifest.ts'
+import { undo, pickUndoable } from './reap/undo.ts'
+import { formatBytes } from './util/bytes.ts'
 import { renderReport, renderJson, renderSummary } from './ui/render.ts'
 import { renderHistory } from './ui/history.ts'
 import { review } from './ui/tui.ts'
 import { liveLine, scanLine, reapLine, shimmerWordmark } from './ui/progress.ts'
+import { nodeVersionNotice } from './util/node-version.ts'
 import pkg from '../package.json' with { type: 'json' }
 
 const VERSION = pkg.version
@@ -22,19 +25,21 @@ USAGE
   purge [group...] [options]
 
 GROUPS (default: all)
-  builds     .next, .turbo, dist, cargo target, venvs, stale node_modules
-  pkg        npm, bun, playwright, electron, homebrew and gradle caches
-  xcode      DerivedData, device support, simulator caches
-  caches     every app's folder in ~/Library/Caches and ~/.cache
+  builds     .next, .turbo, dist, build, target, .terraform, venvs, stale node_modules
+  pkg        npm, pnpm, bun, yarn, go, maven, cocoapods, pub, conda, gradle, brew caches
+  xcode      DerivedData, device support, simulator caches, previews
+  caches     every app's folder in ~/Library/Caches and ~/.cache, Electron app caches
   browsers   GPU and service worker caches, on-device AI models
   editors    Cursor, VS Code, Windsurf and Zed caches
   agents     Claude, Codex, Cursor, Gemini, Copilot, opencode, aider junk
   logs       per-app folders in ~/Library/Logs
   orphans    app data whose app is gone (unchecked — check a row to opt in)
-  heavy      iOS backups, Trash, Docker.raw (unchecked — check a row to opt in)
+  heavy      iOS backups, Trash, Docker/OrbStack, simulators, emulators, local
+             LLM models (unchecked — check a row to opt in)
 
 OPTIONS
   -y, --yes           delete without the review screen
+      --trash         move to the Trash instead of deleting (reverse: purge undo)
       --dry-run       report only, never prompt, never delete
       --json          machine-readable output (implies --dry-run)
       --stale-days N  node_modules idle threshold (default 60)
@@ -44,6 +49,7 @@ OPTIONS
 
 COMMANDS
   purge history [--last] [--json]   past runs and lifetime total
+  purge undo                        put the last --trash run back where it was
 
 purge never touches anything outside your home directory (one exception:
 Claude Code's own /private/tmp scratchpad, always shown with a warning),
@@ -56,6 +62,8 @@ async function main(argv: string[]): Promise<number> {
     process.stderr.write('purge currently supports macOS only.\n')
     return 1
   }
+  const notice = nodeVersionNotice(process.versions.node)
+  if (notice !== null) process.stderr.write(`${notice}\n`)
 
   const home = os.homedir()
   const runsDir = path.join(home, '.purge', 'runs')
@@ -65,6 +73,7 @@ async function main(argv: string[]): Promise<number> {
     ...(config.staleDays !== undefined ? { staleDays: config.staleDays } : {}),
     ...(config.minSize !== undefined ? { minSizeBytes: config.minSize * 1024 * 1024 } : {}),
     ...(config.groups !== undefined ? { groups: config.groups } : {}),
+    ...(config.trash !== undefined ? { trash: config.trash } : {}),
   })
 
   if ('error' in parsed) {
@@ -91,6 +100,21 @@ async function main(argv: string[]): Promise<number> {
     return 0
   }
 
+  if (opts.command === 'undo') {
+    const entries = await readManifestEntries(runsDir)
+    const pick = pickUndoable(entries.map((e) => e.manifest))
+    if (pick === null) {
+      process.stdout.write('\nnothing to undo — only runs made with --trash can be put back.\n')
+      return 0
+    }
+    const file = entries.find((e) => e.manifest === pick)?.file
+    const r = await undo(pick, { home, ...(file !== undefined ? { manifestFile: file } : {}) })
+    const bytes = r.restored.reduce((n, i) => n + i.bytes, 0)
+    process.stdout.write(`\nrestored ${r.restored.length} item(s), ${formatBytes(bytes)}\n`)
+    for (const sk of r.skipped) process.stdout.write(`  skipped ${sk.path}  ${sk.reason}\n`)
+    return 0
+  }
+
   // -- scan ----------------------------------------------------------
   // Claude Code's per-user sandbox scratchpad: the one path outside home the
   // claude scanner may offer and the home guard lets through.
@@ -111,6 +135,7 @@ async function main(argv: string[]): Promise<number> {
     }
   }
 
+  let hidden = { count: 0, bytes: 0, minSizeBytes: opts.minSizeBytes }
   const candidates = await scan(
     {
       home, staleDays: opts.staleDays, now: Date.now(),
@@ -120,6 +145,7 @@ async function main(argv: string[]): Promise<number> {
     {
       groups: opts.groups, minSizeBytes: opts.minSizeBytes,
       onProgress: (done, bytes) => { sized = done; sizedBytes = bytes },
+      onHidden: (count, bytes) => { hidden = { count, bytes, minSizeBytes: opts.minSizeBytes } },
     },
   )
 
@@ -154,7 +180,7 @@ async function main(argv: string[]): Promise<number> {
 
   if (opts.json) { process.stdout.write(`${renderJson(reviewed)}\n`); return anySelectable ? 0 : 2 }
   if (opts.dryRun || !anySelectable) {
-    process.stdout.write(`${renderReport(reviewed, { color, home })}\n`)
+    process.stdout.write(`${renderReport(reviewed, { color, home, hidden })}\n`)
     if (anySelectable) process.stdout.write('\nrun `purge` to pick what to delete\n')
     else process.stdout.write('\nnothing here is reclaimable — the rows above are for review only\n')
     return anySelectable ? 0 : 2
@@ -167,7 +193,7 @@ async function main(argv: string[]): Promise<number> {
       process.stderr.write('purge: not a terminal — use --yes or --dry-run\n')
       return 1
     }
-    const picked = await review(reviewed)
+    const picked = await review(reviewed, hidden)
     if (picked === null) { process.stdout.write('\ncancelled. nothing deleted.\n'); return 0 }
     chosen = picked
   }
@@ -176,19 +202,36 @@ async function main(argv: string[]): Promise<number> {
   if (wanted.length === 0) { process.stdout.write('\nnothing selected. nothing deleted.\n'); return 0 }
 
   // -- reap ----------------------------------------------------------
+  // Ctrl+C mid-delete: finish the item in flight, stop, and still write the
+  // manifest — a half-recorded run is far better than an unrecorded one.
+  const abort = new AbortController()
+  const onSigint = () => abort.abort()
+  process.on('SIGINT', onSigint)
+
   const liveReap = liveLine(process.stdout)
-  const manifest = await reap(chosen, guardCtx, {
-    version: VERSION, runsDir,
+  const { manifest, manifestPath } = await reap(chosen, guardCtx, {
+    version: VERSION, runsDir, signal: abort.signal, trash: opts.trash,
     onProgress: (freed, total) => liveReap.update(reapLine(freed, total, color)),
   })
+  process.off('SIGINT', onSigint)
   liveReap.done()
-  process.stdout.write(`${renderSummary(manifest, { color })}\n`)
 
-  const skipped = wanted.length - manifest.items.length
-  if (skipped > 0) {
+  // The star line shows on a user's first three runs. Only on a terminal:
+  // a log file or a pipe is not a person.
+  const runCount = color ? (await readManifests(runsDir)).length : undefined
+  process.stdout.write(`${renderSummary(manifest, { color, home, ...(runCount !== undefined ? { runCount } : {}) })}\n`)
+
+  if (abort.signal.aborted) {
+    process.stdout.write(`interrupted — ${manifest.items.length} of ${wanted.length} item(s) were deleted before Ctrl+C.\n`)
+  }
+  if (manifestPath === null) {
+    process.stderr.write(`purge: could not save the run record under ${runsDir} — the deletions above still happened.\n`)
+  }
+  const skipped = wanted.length - manifest.items.length - manifest.failed.length
+  if (!abort.signal.aborted && skipped > 0) {
     process.stdout.write(`${skipped} item(s) changed since the scan and were skipped.\n`)
   }
-  return 0
+  return abort.signal.aborted ? 130 : 0
 }
 
 main(process.argv.slice(2)).then(

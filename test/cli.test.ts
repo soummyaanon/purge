@@ -123,3 +123,34 @@ test('orphans alone exit 0 — reclaimable through the review screen', async () 
   const { stdout } = await invoke(['--dry-run', 'orphans', '--min-size', '0'], home)
   assert.match(stdout, /run `purge` to pick what to delete/)
 })
+
+test('--yes names a path it could not delete instead of calling it "changed"', async () => {
+  const home = await sandboxHome()
+  const junk = path.join(home, 'proj', '.next')
+  await fs.chmod(junk, 0o555)
+  try {
+    const { stdout } = await invoke(['--yes', 'builds', '--min-size', '0'], home)
+    assert.match(stdout, /could not delete/, stdout)
+    assert.match(stdout, /EACCES|EPERM/)
+    assert.doesNotMatch(stdout, /changed since the scan/)
+  } finally {
+    await fs.chmod(junk, 0o755)
+  }
+})
+
+test('--trash then undo brings the directory back', async () => {
+  const home = await sandboxHome()
+  const junk = path.join(home, 'proj', '.next')
+  await invoke(['--yes', '--trash', 'builds', '--min-size', '0'], home)
+  assert.equal(await fs.access(junk).then(() => true, () => false), false, '--trash did not move it')
+
+  const { stdout } = await invoke(['undo'], home)
+  assert.match(stdout, /restored/)
+  assert.equal(await fs.access(path.join(junk, 'chunk.js')).then(() => true, () => false), true, 'undo did not restore')
+})
+
+test('undo with nothing to undo says so and exits 0', async () => {
+  const home = await sandboxHome()
+  const { stdout } = await invoke(['undo'], home)
+  assert.match(stdout, /nothing to undo/)
+})

@@ -4,6 +4,74 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semver](https://semver.org).
 
+## [0.8.1] - 2026-09-12
+
+### Changed
+- Release workflow: the Homebrew bump job waits up to 20 minutes for npm's
+  CDN to serve a freshly published tarball (v0.8.0 took over ten), strips
+  stray whitespace from the tap token and re-masks it, refuses a secret
+  that is not shaped like a GitHub token with a plain message, and can be
+  run by hand via `workflow_dispatch` for an already-published version.
+  No code changes.
+
+## [0.8.0] - 2026-09-12
+
+### Added
+- `--trash` (or `"trash": true` in `~/.purgerc`): every item is moved into
+  `~/.Trash` with a rename instead of deleted. Instant, same volume, sizes
+  preserved. The Trash row itself is still deleted for real — it cannot be
+  moved into itself.
+- `purge undo`: moves the newest `--trash` run back to where it came from.
+  Refuses to overwrite anything that exists again, to restore outside your
+  home directory, or to move anything that is not inside the Trash. The
+  manifest is marked `undoneAt`, `history` shows `undone`, and the lifetime
+  total leaves it out. Plain runs still delete for real and cannot be undone;
+  `undo` says so.
+- Electron app caches: any folder under `~/Library/Application Support`
+  with both `Cache` and `Code Cache` — Slack, Discord, Notion, Figma,
+  Postman, Teams, Zoom, and apps purge has never heard of — has its
+  `Cache`, `Code Cache`, `GPUCache` and Dawn shader caches offered in the
+  `caches` group. `Local Storage`, `IndexedDB`, `Session Storage` and
+  `Service Worker` are never touched. Apps other scanners own are skipped.
+- `pkg` group: Go module download cache, Maven repository, CocoaPods specs,
+  pub cache, NuGet packages, Composer cache, Yarn Berry cache, and the conda
+  package cache under miniconda3/anaconda3/miniforge3/mambaforge/.conda.
+- `builds` group: `.terraform`, `.dart_tool`, `.gradle`, `.tox`,
+  `.mypy_cache`, `.pytest_cache`, `.ruff_cache`, `.angular`, `.docusaurus`,
+  `.serverless`; `build/` beside a `pubspec.yaml`, Gradle or CMake manifest;
+  `target/` beside `pom.xml` or `build.sbt`; a project `.cache/` beside a
+  `package.json`.
+- `xcode` group: SwiftUI preview simulators (`Xcode/UserData/Previews`).
+- `heavy` group: simulator devices, Android emulators and system images,
+  Ollama and LM Studio models, OrbStack data — each dangerous-by-default
+  with a warning naming exactly what the loss is and which native tool
+  reclaims the space more gently.
+- The summary asks for a GitHub star on your first three runs, then never
+  again. Terminal only, never in `--json`, no network involved — the count
+  comes from the manifests purge already writes.
+
+### Changed
+- A path the reaper could not remove (permission denied, a file held open)
+  is now listed by name with its error code under `could not delete`,
+  instead of being counted among items that "changed since the scan".
+- Ctrl+C during deletion stops at the next item boundary, writes the
+  manifest for everything already removed, prints the partial summary and
+  exits 130. Before, it killed the process with no record.
+- A run record that cannot be saved (unwritable `~/.purge`) no longer
+  hides the summary of what was just deleted; it prints a warning instead.
+- Review screen rows are fitted to the terminal width: long paths are
+  middle-ellipsized with their tail kept, the note gives way before the
+  warning, and nothing wraps and garbles the frame on an 80-column
+  terminal.
+- A one-line notice on stderr when running under a Node older than 22.18,
+  naming both versions. Advisory only; the run continues.
+- The walker no longer enters `~/.npm`, `~/.bun`, `~/.gradle`, `~/.m2`,
+  `~/go/pkg/mod`, conda distributions or the heavy roots — they are offered
+  whole by their own scanners, and walking the npm cache alone cost seconds.
+- The release workflow now creates a GitHub Release with the changelog
+  section as its notes, and bumps the Homebrew tap formula when a
+  `TAP_GITHUB_TOKEN` secret is present.
+
 ## [0.7.1] - 2026-09-08
 
 ### Changed

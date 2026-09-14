@@ -13,6 +13,19 @@ import { ALLOW, type Guard } from './guard.ts'
  * the friction — nothing here can be swept up in bulk — while honouring an
  * explicit, per-row decision.
  */
+/** Heavy-row label → the exact loss. Prefix match, so `iOS backup <id>` works. */
+const HEAVY_LOSS: Array<[string, string]> = [
+  ['iOS backup', 'a device backup — deleting it is permanent'],
+  ['Docker.raw', 'destroys all Docker containers, images & volumes — quit Docker Desktop first'],
+  ['.Trash', 'empties the Trash for good'],
+  ['Simulator devices', 'erases every simulator and its apps — xcrun simctl delete unavailable is gentler'],
+  ['Android emulators', 'erases every Android emulator (AVD) and everything installed on it'],
+  ['Android system images', 'emulators stop booting until re-downloaded via SDK Manager'],
+  ['Ollama models', 'every model must be pulled again — tens of GB'],
+  ['LM Studio models', 'every model must be downloaded again — tens of GB'],
+  ['OrbStack data', 'destroys all OrbStack containers, images & machines — quit OrbStack first'],
+]
+
 export const dangerGuard: Guard = {
   name: 'danger',
   check(c) {
@@ -20,16 +33,8 @@ export const dangerGuard: Guard = {
       return { action: 'danger', warning: 'settings & data for an app that is gone — not regenerable' }
     }
     if (c.group === 'heavy') {
-      if (c.label.startsWith('iOS backup')) {
-        return { action: 'danger', warning: 'a device backup — deleting it is permanent' }
-      }
-      if (c.label === 'Docker.raw') {
-        return { action: 'danger', warning: 'destroys all Docker containers, images & volumes — quit Docker Desktop first' }
-      }
-      if (c.label === '.Trash') {
-        return { action: 'danger', warning: 'empties the Trash for good' }
-      }
-      return { action: 'danger', warning: 'not regenerable — deletes real data' }
+      const hit = HEAVY_LOSS.find(([prefix]) => c.label.startsWith(prefix))
+      return { action: 'danger', warning: hit?.[1] ?? 'not regenerable — deletes real data' }
     }
     return ALLOW
   },

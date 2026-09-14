@@ -180,3 +180,19 @@ test('downgrades Gemini CLI checkpoints', async () => {
   assert.equal(v.action, 'downgrade')
   assert.match(v.action === 'downgrade' ? v.warning : '', /restore/)
 })
+
+test('every new heavy row gets a warning that names its specific loss', async () => {
+  const cases: Array<[string, RegExp]> = [
+    ['Simulator devices', /simctl/],
+    ['Android emulators', /emulator/i],
+    ['Android system images', /SDK Manager/],
+    ['Ollama models', /pull/],
+    ['LM Studio models', /download/],
+    ['OrbStack data', /containers/],
+  ]
+  for (const [label, rx] of cases) {
+    const v = await dangerGuard.check(cand('/Users/x/whatever', { group: 'heavy', label }), ctx)
+    assert.equal(v.action, 'danger', label)
+    assert.match(v.action === 'danger' ? v.warning : '', rx, label)
+  }
+})

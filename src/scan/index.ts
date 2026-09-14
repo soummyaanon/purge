@@ -24,8 +24,10 @@ const WALK_SCANNERS: WalkScanner[] = [
 ]
 
 const PATH_SCANNERS: PathScanner[] = [
-  pkgCacheScanner, xcodeScanner, editorsScanner, browsersScanner, electronScanner, orphansScanner,
+  pkgCacheScanner, xcodeScanner, editorsScanner, browsersScanner, orphansScanner,
   sysCachesScanner, logsScanner, agentsScanner, heavyScanner,
+  // after orphans on purpose: an app offered whole is not also offered in pieces
+  electronScanner,
   // last on purpose: discovery dedupes against everything claimed above
   discoverScanner,
 ]
@@ -47,6 +49,13 @@ const SKIP_UNDER_HOME = [
   '.vscode', '.cursor', '.claude', '.codex', '.windsurf', '.local', '.rustup', '.cargo/registry',
   // owned by the caches scanner; the walker would claim venvs buried inside it
   '.cache',
+  // package caches the pkg scanner offers whole. Walking them is slow (the
+  // npm cache alone is tens of thousands of directories) and every `dist/`
+  // or `node_modules` inside is part of a download, not a project.
+  '.npm', '.bun', '.gradle', '.m2', '.pub-cache', '.nuget', '.composer', '.cocoapods', '.yarn',
+  'go/pkg/mod', 'miniconda3', 'anaconda3', 'miniforge3', 'mambaforge', '.conda',
+  // heavy items the heavy scanner offers whole
+  '.android', '.ollama', '.lmstudio', '.orbstack',
 ]
 
 async function sizeAll(
@@ -81,7 +90,7 @@ async function sizeAll(
  */
 export async function scan(
   ctx: ScanContext,
-  opts: { groups: Group[]; minSizeBytes: number; onProgress?: (done: number, bytes: number) => void },
+  opts: { groups: Group[]; minSizeBytes: number; onProgress?: (done: number, bytes: number) => void; onHidden?: (count: number, bytes: number) => void },
 ): Promise<Candidate[]> {
   const wanted = new Set(opts.groups)
   const raw: RawCandidate[] = []
@@ -110,6 +119,8 @@ export async function scan(
   }
 
   const sized = await sizeAll(raw, opts.onProgress)
+  const hidden = sized.filter((c) => c.bytes < opts.minSizeBytes)
+  opts.onHidden?.(hidden.length, hidden.reduce((sum, c) => sum + c.bytes, 0))
   return sized
     .filter((c) => c.bytes >= opts.minSizeBytes)
     .sort((a, b) => b.bytes - a.bytes)
