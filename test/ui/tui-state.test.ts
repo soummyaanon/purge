@@ -308,3 +308,29 @@ test('the hidden-by-size footer displaces a body row instead of growing the fram
   assert.match(withHidden, /12 items under 10 MB hidden \(5 MB\) · --min-size 0 shows them/)
   assert.equal(withHidden.split('\n').length, plain.split('\n').length)
 })
+
+import { renderHeader } from '../../src/ui/tui-state.ts'
+import { wordmark } from '../../src/ui/progress.ts'
+
+test('review header is the wordmark with the mascot idling beside it, three rows tall', () => {
+  const rows = renderHeader(0, { color: false, mascot: true })
+  const mark = wordmark().split('\n')
+  assert.equal(rows.length, 3, 'the mascot must not cost the list a row')
+  assert.ok(rows[0]?.startsWith(mark[0] ?? '?'), rows[0])
+  assert.ok(rows[1]?.startsWith(mark[1] ?? '?'), rows[1])
+  assert.match(rows[0] ?? '', /╭───╮$/)
+  assert.match(rows[1] ?? '', /│◕ ◕│$/)
+  assert.match(rows[2] ?? '', /^ +╰───╯$/, 'the blank separator row carries the bot\'s feet')
+})
+
+test('review header without the mascot is the wordmark and a blank row', () => {
+  assert.deepEqual(renderHeader(0, { color: false, mascot: false }), [...wordmark().split('\n'), ''])
+})
+
+test('review header in color strips back to the plain header', () => {
+  const strip = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, '')
+  const plain = renderHeader(4, { color: false, mascot: true })
+  const colored = renderHeader(4, { color: true, mascot: true })
+  assert.notDeepEqual(colored, plain)
+  assert.deepEqual(colored.map(strip), plain)
+})

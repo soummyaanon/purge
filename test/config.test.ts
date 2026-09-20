@@ -62,3 +62,13 @@ test('ignores a trash value that is not a boolean', async () => {
   const c = await loadConfig(await home(JSON.stringify({ trash: 'yes' })))
   assert.equal(c.trash, undefined)
 })
+
+test('reads the mascot switch', async () => {
+  const c = await loadConfig(await home(JSON.stringify({ mascot: false })))
+  assert.equal(c.mascot, false)
+})
+
+test('ignores a mascot value that is not a boolean', async () => {
+  const c = await loadConfig(await home(JSON.stringify({ mascot: 'off' })))
+  assert.equal(c.mascot, undefined)
+})

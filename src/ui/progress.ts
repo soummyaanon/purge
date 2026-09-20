@@ -34,10 +34,16 @@ export function barLine(done: number, total: number, width: number): string {
   return '█'.repeat(filled) + '░'.repeat(width - filled)
 }
 
-export function scanLine(tick: number, sized: number, bytes: number, color = false): string {
-  if (!color) return `${spinnerFrame(tick)} scanning  ${sized} sized · ${formatBytes(bytes)} found`
-  return `${fg(INK.brightCyan, spinnerFrame(tick))} ${fg(INK.gray, 'scanning')}  ` +
+/** The scan status without a spinner, for when the mascot is the liveness signal. */
+export function scanText(sized: number, bytes: number, color = false): string {
+  if (!color) return `scanning  ${sized} sized · ${formatBytes(bytes)} found`
+  return `${fg(INK.gray, 'scanning')}  ` +
     `${fg(INK.blue, `${sized} sized`)}${fg(INK.dim, ' · ')}${fg(INK.cyan, `${formatBytes(bytes)} found`)}`
+}
+
+export function scanLine(tick: number, sized: number, bytes: number, color = false): string {
+  const spinner = color ? fg(INK.brightCyan, spinnerFrame(tick)) : spinnerFrame(tick)
+  return `${spinner} ${scanText(sized, bytes, color)}`
 }
 
 export function reapLine(freedBytes: number, totalBytes: number, color = false): string {
@@ -99,6 +105,32 @@ export function liveLine(stream: NodeJS.WriteStream) {
       if (!tty) return
       stream.write('\r\x1b[2K')
       if (finalText !== undefined) stream.write(`${finalText}\n`)
+    },
+  }
+}
+
+/**
+ * Rewrites a block of terminal rows in place — the multi-row sibling of
+ * liveLine, for the mascot beside a status line. Every call must pass the
+ * same number of rows: the cursor climbs back over the rows drawn last time,
+ * so a shrinking block would leave its tail on screen. Inert off-TTY.
+ */
+export function liveBlock(stream: NodeJS.WriteStream) {
+  const tty = stream.isTTY === true
+  let drawn = 0
+  // ESC[nA with n = 0 still moves one line on some terminals, so a one-row
+  // block must not emit it at all.
+  const toTop = () => (drawn > 1 ? `\x1b[${drawn - 1}A` : '')
+  return {
+    update(rows: string[]) {
+      if (!tty) return
+      stream.write(`\r${toTop()}${rows.map((r) => `\x1b[2K${r}`).join('\n')}`)
+      drawn = rows.length
+    },
+    done() {
+      if (!tty || drawn === 0) return
+      stream.write(`\r${toTop()}\x1b[J`)
+      drawn = 0
     },
   }
 }

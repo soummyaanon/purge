@@ -12,7 +12,8 @@ import { formatBytes } from './util/bytes.ts'
 import { renderReport, renderJson, renderSummary } from './ui/render.ts'
 import { renderHistory } from './ui/history.ts'
 import { review } from './ui/tui.ts'
-import { liveLine, scanLine, reapLine, shimmerWordmark } from './ui/progress.ts'
+import { liveLine, liveBlock, scanLine, reapLine, shimmerWordmark } from './ui/progress.ts'
+import { scanBlock, reapBlock, wantsMascot } from './ui/mascot.ts'
 import { nodeVersionNotice } from './util/node-version.ts'
 import pkg from '../package.json' with { type: 'json' }
 
@@ -121,7 +122,11 @@ async function main(argv: string[]): Promise<number> {
   const uid = process.getuid?.()
   const claudeTmpDir = uid === undefined ? undefined : `/private/tmp/claude-${uid}`
 
-  const live = liveLine(process.stderr)
+  // With the mascot on, the bot is the liveness signal and the status line
+  // rides on its middle row; otherwise the braille spinner does the job.
+  const mascotScan = wantsMascot(process.stderr, config.mascot)
+  const scanLive = liveLine(process.stderr)
+  const scanBlk = liveBlock(process.stderr)
   let tick = 0
   let sized = 0
   let sizedBytes = 0
@@ -129,7 +134,10 @@ async function main(argv: string[]): Promise<number> {
   if (!opts.json) {
     if (process.stderr.isTTY === true) {
       process.stderr.write(`${shimmerWordmark(4, true)}\x1b[38;5;245m  v${VERSION} — say purge to the junk on your Mac\x1b[0m\n\n`)
-      timer = setInterval(() => live.update(scanLine(tick++, sized, sizedBytes, true)), 80)
+      timer = setInterval(() => {
+        if (mascotScan) scanBlk.update(scanBlock(tick++, sized, sizedBytes, true))
+        else scanLive.update(scanLine(tick++, sized, sizedBytes, true))
+      }, 80)
     } else {
       process.stderr.write('purge  scanning...\n')
     }
@@ -150,7 +158,8 @@ async function main(argv: string[]): Promise<number> {
   )
 
   if (timer !== undefined) clearInterval(timer)
-  live.done()
+  scanBlk.done()
+  scanLive.done()
 
   const homeStat = await fs.lstat(home)
   // "Desktop & Documents Folders" iCloud sync presents ~/Documents and
@@ -193,7 +202,7 @@ async function main(argv: string[]): Promise<number> {
       process.stderr.write('purge: not a terminal — use --yes or --dry-run\n')
       return 1
     }
-    const picked = await review(reviewed, hidden)
+    const picked = await review(reviewed, hidden, { mascot: wantsMascot(process.stdout, config.mascot) })
     if (picked === null) { process.stdout.write('\ncancelled. nothing deleted.\n'); return 0 }
     chosen = picked
   }
@@ -208,13 +217,33 @@ async function main(argv: string[]): Promise<number> {
   const onSigint = () => abort.abort()
   process.on('SIGINT', onSigint)
 
-  const liveReap = liveLine(process.stdout)
-  const { manifest, manifestPath } = await reap(chosen, guardCtx, {
-    version: VERSION, runsDir, signal: abort.signal, trash: opts.trash,
-    onProgress: (freed, total) => liveReap.update(reapLine(freed, total, color)),
-  })
-  process.off('SIGINT', onSigint)
-  liveReap.done()
+  // The reaper only reports at item boundaries; a big item can take a
+  // while, so with the mascot on a timer keeps the broom moving in between.
+  const mascotReap = wantsMascot(process.stdout, config.mascot)
+  const reapLive = liveLine(process.stdout)
+  const reapBlk = liveBlock(process.stdout)
+  let reapTick = 0
+  let progress = { freed: 0, total: wanted.reduce((n, w) => n + w.bytes, 0) }
+  const drawReap = () => reapBlk.update(reapBlock(reapTick++, progress.freed, progress.total, true))
+  const reapTimer = mascotReap ? setInterval(drawReap, 120) : undefined
+  let reaped: Awaited<ReturnType<typeof reap>>
+  try {
+    reaped = await reap(chosen, guardCtx, {
+      version: VERSION, runsDir, signal: abort.signal, trash: opts.trash,
+      onProgress: (freed, total) => {
+        progress = { freed, total }
+        if (mascotReap) drawReap()
+        else reapLive.update(reapLine(freed, total, color))
+      },
+    })
+  } finally {
+    // A dangling interval would keep the process alive after a failure.
+    if (reapTimer !== undefined) clearInterval(reapTimer)
+    process.off('SIGINT', onSigint)
+    reapBlk.done()
+    reapLive.done()
+  }
+  const { manifest, manifestPath } = reaped
 
   // The star line shows on a user's first three runs. Only on a terminal:
   // a log file or a pipe is not a person.

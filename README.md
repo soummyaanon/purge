@@ -149,11 +149,15 @@ is allowed to call `rm`.)
   "keep": ["**/work/**", "~/Developer/client-project/**"],
   "staleDays": 90,
   "minSize": 25,
-  "trash": true
+  "trash": true,
+  "mascot": false
 }
 ```
 
-Anything matching `keep` is never shown and never deleted.
+Anything matching `keep` is never shown and never deleted. `mascot: false`
+hides the little bot that looks for junk beside the scan line, sweeps it
+away beside the delete bar, and idles next to the wordmark on the review
+screen (it only ever appears on a terminal at least 60 columns wide).
 
 ## Reports
 

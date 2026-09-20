@@ -46,3 +46,66 @@ test('colored scan and reap lines strip back to the plain ones', () => {
   assert.equal(strip(reapLine(512, 1024, true)), reapLine(512, 1024))
   assert.match(scanLine(3, 17, 1024, true), /38;5;/, 'expects 256-color output')
 })
+
+import { scanText, liveBlock } from '../../src/ui/progress.ts'
+
+test('scan text is the scan line without its spinner', () => {
+  assert.equal(scanLine(3, 17, 1024), `${spinnerFrame(3)} ${scanText(17, 1024)}`)
+  assert.equal(strip(scanText(17, 1024, true)), scanText(17, 1024))
+  assert.match(scanText(17, 1024, true), /38;5;/)
+})
+
+/** The smallest stand-in for a terminal that records what was written. */
+function recorder(tty: boolean) {
+  const writes: string[] = []
+  const stream = { isTTY: tty, write: (s: string) => { writes.push(s); return true } }
+  return { stream: stream as unknown as NodeJS.WriteStream, writes }
+}
+
+test('live block writes nothing off a TTY', () => {
+  const { stream, writes } = recorder(false)
+  const block = liveBlock(stream)
+  block.update(['a', 'b'])
+  block.done()
+  assert.deepEqual(writes, [])
+})
+
+test('live block clears each row as it draws and leaves the cursor on the last row', () => {
+  const { stream, writes } = recorder(true)
+  liveBlock(stream).update(['one', 'two', 'three'])
+  assert.equal(writes.join(''), '\r\x1b[2Kone\n\x1b[2Ktwo\n\x1b[2Kthree')
+})
+
+test('live block moves back to its top row before redrawing', () => {
+  const { stream, writes } = recorder(true)
+  const block = liveBlock(stream)
+  block.update(['one', 'two', 'three'])
+  writes.length = 0
+  block.update(['uno', 'dos', 'tres'])
+  assert.equal(writes.join(''), '\r\x1b[2A\x1b[2Kuno\n\x1b[2Kdos\n\x1b[2Ktres')
+})
+
+test('live block never emits a zero-line cursor move for a one-row block', () => {
+  // ESC[0A moves one line on some terminals, so a one-row block would creep upward.
+  const { stream, writes } = recorder(true)
+  const block = liveBlock(stream)
+  block.update(['only'])
+  block.update(['still'])
+  assert.doesNotMatch(writes.join(''), /\x1b\[0A/)
+  assert.equal(writes.join(''), '\r\x1b[2Konly\r\x1b[2Kstill')
+})
+
+test('live block done erases the block and parks the cursor on its first row', () => {
+  const { stream, writes } = recorder(true)
+  const block = liveBlock(stream)
+  block.update(['one', 'two', 'three'])
+  writes.length = 0
+  block.done()
+  assert.equal(writes.join(''), '\r\x1b[2A\x1b[J')
+})
+
+test('live block done before any update writes nothing', () => {
+  const { stream, writes } = recorder(true)
+  liveBlock(stream).done()
+  assert.deepEqual(writes, [])
+})

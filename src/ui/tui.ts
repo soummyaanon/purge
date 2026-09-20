@@ -1,8 +1,7 @@
 import readline from 'node:readline'
 import os from 'node:os'
 import type { Reviewed } from '../types.ts'
-import { initState, reduce, renderFrame, type TuiState } from './tui-state.ts'
-import { shimmerWordmark } from './progress.ts'
+import { initState, reduce, renderFrame, renderHeader, type TuiState } from './tui-state.ts'
 
 // The escape character MUST be written as \x1b. A literal ESC byte pasted
 // into source is invisible in most editors and silently lost when the file is
@@ -57,7 +56,9 @@ function keyName(
  * Full-screen checkbox review. Resolves with the user's selection, or null
  * if they quit. Restores the terminal on every exit path, including SIGINT.
  */
-export function review(items: Reviewed[], hidden?: TuiState['hidden']): Promise<Reviewed[] | null> {
+export function review(
+  items: Reviewed[], hidden?: TuiState['hidden'], opts?: { mascot?: boolean },
+): Promise<Reviewed[] | null> {
   return new Promise((resolve) => {
     const out = process.stdout
     let state: TuiState = initState(items, hidden)
@@ -66,14 +67,16 @@ export function review(items: Reviewed[], hidden?: TuiState['hidden']): Promise<
     const draw = () => {
       out.write(CLEAR)
       const color = out.isTTY === true
-      // Wordmark takes 3 rows (2 letters + 1 blank); the frame gets the rest.
-      out.write(`${shimmerWordmark(tick, color)}\n\n`)
+      // The header takes 3 rows (wordmark, with the mascot beside it when
+      // on); the frame gets the rest.
+      out.write(`${renderHeader(tick, { color, mascot: opts?.mascot === true }).join('\n')}\n`)
       out.write(renderFrame(state, Math.max((out.rows ?? 24) - 3, 8), {
         color, home: os.homedir(), width: out.columns ?? 80,
       }))
     }
 
-    // The shimmer sweep. Only the wordmark animates, and only on a real TTY.
+    // The shimmer sweep and the mascot's blink. Only the header animates,
+    // and only on a real TTY.
     const shimmer = out.isTTY === true
       ? setInterval(() => { tick++; draw() }, 120)
       : undefined

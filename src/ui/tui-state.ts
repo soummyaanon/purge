@@ -1,6 +1,8 @@
 import type { Group, Reviewed } from '../types.ts'
 import { formatBytes } from '../util/bytes.ts'
 import { HEADERS, ORDER, tildify } from './render.ts'
+import { shimmerWordmark } from './progress.ts'
+import { mascotFrame, beside } from './mascot.ts'
 
 export type Row =
   | { kind: 'header'; group: Group; bytes: number; count: number }
@@ -302,4 +304,16 @@ export function renderFrame(
   const selected = s.items.filter((i) => i.selected && i.selectable)
   lines.push(paint(C.accent, fit(`  selected: ${selected.length} items, ${formatBytes(selectedBytes(s))}`)))
   return lines.join('\n')
+}
+
+/**
+ * The three rows above the list: the shimmering wordmark and, when the
+ * mascot is on, the bot idling in the empty space to its right. The bot's
+ * feet land on what is otherwise the blank separator row, so the header is
+ * three rows either way and the list never loses a row to it.
+ */
+export function renderHeader(tick: number, opts: { color: boolean; mascot: boolean }): string[] {
+  const mark = [...shimmerWordmark(tick, opts.color).split('\n'), '']
+  if (!opts.mascot) return mark
+  return beside(mark, mascotFrame('idle', tick, opts.color), 6)
 }
