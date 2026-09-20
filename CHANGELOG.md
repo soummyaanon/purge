@@ -4,6 +4,16 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semver](https://semver.org).
 
+## [0.9.0] - 2026-09-20
+
+### Added
+- A mascot: a small box-drawing bot that holds a magnifier beside the scan
+  line, sweeps junk off the edge beside the delete progress bar, and idles
+  (and blinks) next to the wordmark on the review screen. The review
+  screen's header stays three rows, so the list keeps every row it had.
+  Drawn only on a terminal at least 60 columns wide, never in `--json` or
+  piped output; `"mascot": false` in `~/.purgerc` turns it off.
+
 ## [0.8.2] - 2026-09-15
 
 ### Added
