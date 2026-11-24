@@ -210,3 +210,7 @@ macOS. Node 22.18+ for the npm install; the Homebrew install brings its own.
 ## License
 
 MIT © soummyaanon
+
+---
+
+Built by [Soumyaranjan Panda](https://soumyapanda.dev)
